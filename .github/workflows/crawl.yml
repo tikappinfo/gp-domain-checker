@@ -1,0 +1,55 @@
+name: Crawl Google Play and Check Domains
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Number of apps to collect (1M–10M installs)"
+        required: false
+        default: "500"
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'requirements.txt'
+      - '.github/workflows/crawl.yml'
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run crawl
+        run: |
+          mkdir -p data
+          python -m src.main --limit ${{ inputs.limit }} --out data/apps_${{ inputs.limit }}.csv
+
+      - name: Upload CSV artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apps-csv
+          path: data/*.csv
+
+      - name: Commit CSV to results branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B results
+          git add data/*.csv || true
+          git commit -m "Add crawl results (limit=${{ inputs.limit }})" || echo "No changes to commit"
+          git push --set-upstream origin results
