@@ -1,9 +1,15 @@
 import random, re, time
 from typing import List, Dict, Tuple, Set
-import requests
+import os, requests
 import certifi
 from bs4 import BeautifulSoup
 from tenacity import retry, stop_after_attempt, wait_exponential
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+
+driver = None
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125 Safari/537.36",
@@ -163,31 +169,32 @@ HEADERS_LIST = [
     ]
 ]
 
+driver = None
+
 @retry(reraise=True, stop=stop_after_attempt(2), wait=wait_exponential(multiplier=1, min=1, max=3), retry=retry_if_exception_type(Exception))
 def fetch(url: str, timeout: int = 12) -> str:
-    headers = random.choice(HEADERS_LIST)
+    global driver
+    if driver is None:
+        options = Options()
+        options.add_argument("--headless")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-blink-features=AutomationControlled")
+        options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        options.add_experimental_option('useAutomationExtension', False)
+        options.add_argument("--window-size=1920,1080")
+        options.add_argument("--ignore-certificate-errors")
+        options.add_argument("--ignore-ssl-errors")
+        options.add_argument("--allow-insecure-localhost")
+        options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36")
+        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
     try:
-        r = requests.get(url, headers=headers, timeout=timeout, verify=certifi.where())
-        if r.status_code >= 500:
-            raise RuntimeError(f"Server error {r.status_code}")
-        r.raise_for_status()
+        driver.get(url)
+        time.sleep(3)  # Wait for JS to load content
         time.sleep(random.uniform(0.15, 0.35))
-        return r.text
-    except Exception:
-        # Fallback via text proxy to bypass network/SSL blocks
-        try:
-            inner = url
-            if inner.startswith("https://"):
-                inner = inner[len("https://"):]
-            elif inner.startswith("http://"):
-                inner = inner[len("http://"):]
-            proxy_url = f"https://r.jina.ai/http://{inner}"
-            r2 = requests.get(proxy_url, headers={"User-Agent": headers["User-Agent"]}, timeout=timeout)
-            r2.raise_for_status()
-            time.sleep(random.uniform(0.1, 0.25))
-            return r2.text
-        except Exception as e:
-            raise e
+        return driver.page_source
+    except Exception as e:
+        raise RuntimeError(f"Selenium fetch failed: {e}")
 
 APP_ID_RE = re.compile(r"/store/apps/details\?id=([a-zA-Z0-9_\.\-]+)")
 

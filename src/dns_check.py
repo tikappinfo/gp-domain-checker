@@ -1,6 +1,6 @@
 import random, time
 from typing import Dict
-import requests
+import os, requests
 
 DOH_URL = "https://dns.google/resolve"
 TIME_BETWEEN = (0.5, 1.1)
@@ -40,7 +40,8 @@ DNS_GOOGLE = "https://dns.google/resolve"
 
 def doh_query(name: str, qtype: str = "A"):
     try:
-        r = requests.get(DNS_GOOGLE, params={"name": name, "type": qtype}, timeout=15)
+        insecure = os.environ.get("REQUESTS_INSECURE", "0") == "1"
+        r = requests.get(DNS_GOOGLE, params={"name": name, "type": qtype}, timeout=15, verify=False if insecure else True)
         r.raise_for_status()
         return r.json()
     except Exception:
