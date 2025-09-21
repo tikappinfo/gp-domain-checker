@@ -17,6 +17,8 @@ on:
 jobs:
   crawl:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     timeout-minutes: 90
     steps:
       - name: Checkout
@@ -43,13 +45,13 @@ jobs:
           name: apps-csv
           path: data/*.csv
 
-      - name: Commit CSV to results branch
+      - name: Commit CSV to results branch (non-fatal)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -B results
-          git add data/*.csv || true
+          git add -f data/*.csv || true
           git commit -m "Add crawl results (limit=${{ inputs.limit }})" || echo "No changes to commit"
-          git push --set-upstream origin results
+          git push --set-upstream origin results || echo "Push to results branch failed; artifact still uploaded."
